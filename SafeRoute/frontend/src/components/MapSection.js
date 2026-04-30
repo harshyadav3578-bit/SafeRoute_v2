@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
   Polyline,
   Marker,
+  Popup,
+  useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "../styles/MapSection.css";
 import API_BASE_URL from "../config/api";
 
-// Fix marker icon
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
@@ -17,257 +19,415 @@ const DefaultIcon = L.icon({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
+
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const MapSection = () => {
+const ROUTE_COLORS = ["#22c55e", "#3b82f6", "#f59e0b"];
+
+function ResizeMap({ routes }) {
+  const map = useMap();
+
+  useEffect(() => {
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
+  }, [map, routes]);
+
+  return null;
+}
+
+function FitRouteBounds({ sourceCoords, destinationCoords }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (sourceCoords && destinationCoords) {
+      setTimeout(() => {
+        map.invalidateSize();
+        map.fitBounds([sourceCoords, destinationCoords], {
+          padding: [50, 50],
+        });
+      }, 300);
+    }
+  }, [map, sourceCoords, destinationCoords]);
+
+  return null;
+}
+
+function MapSection() {
   const [source, setSource] = useState("");
   const [destination, setDestination] = useState("");
-
-  const [routes, setRoutes] = useState([]);
-  const [selectedRoute, setSelectedRoute] = useState(null);
-  const [aiResponse, setAiResponse] = useState(null);
+  const [preference, setPreference] = useState("");
 
   const [sourceCoords, setSourceCoords] = useState(null);
-  const [destCoords, setDestCoords] = useState(null);
+  const [destinationCoords, setDestinationCoords] = useState(null);
 
-  const [userPosition, setUserPosition] = useState(null);
-  const [navigating, setNavigating] = useState(false);
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(0);
+  const [aiResponse, setAiResponse] = useState(null);
 
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const defaultCenter = [28.6139, 77.209];
 
-  // 🔹 Get current location
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      setUserPosition([pos.coords.latitude, pos.coords.longitude]);
-    });
-  }, []);
-
-  // 🔹 Geocode
   const geocode = async (place) => {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${place}`
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+        place
+      )}`
     );
+
     const data = await res.json();
 
-    if (!data.length) throw new Error("Location not found");
+    if (!data.length) {
+      throw new Error(`Location not found: ${place}`);
+    }
 
     return {
-      lat: parseFloat(data[0].lat),
-      lng: parseFloat(data[0].lon),
+      lat: Number(data[0].lat),
+      lng: Number(data[0].lon),
     };
   };
 
-  // 🔹 Get routes
-  const getRoutes = async (src, dest) => {
+  const getRoutesFromOSRM = async (src, dest) => {
     const url = `https://router.project-osrm.org/route/v1/driving/${src.lng},${src.lat};${dest.lng},${dest.lat}?alternatives=true&overview=full&geometries=geojson`;
 
     const res = await fetch(url);
     const data = await res.json();
 
-    return data.routes.slice(0, 3).map((route, i) => ({
-      routeIndex: i,
+    if (!data.routes || data.routes.length === 0) {
+      throw new Error("No route found");
+    }
+
+    return data.routes.slice(0, 3).map((route, index) => ({
+      routeIndex: index,
       coordinates: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-      distanceKm: (route.distance / 1000).toFixed(2),
+      distanceKm: Number((route.distance / 1000).toFixed(2)),
       durationMin: Math.ceil(route.duration / 60),
+      color: ROUTE_COLORS[index % ROUTE_COLORS.length],
     }));
   };
 
-  // 🔹 Score routes
-  const scoreRoutes = async (routes) => {
-    const res = await fetch(
-      `${API_BASE_URL}/api/route-safety/score-routes`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ routes }),
-      }
-    );
+  const scoreRoutes = async (rawRoutes) => {
+    const res = await fetch(`${API_BASE_URL}/api/route-safety/score-routes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ routes: rawRoutes }),
+    });
 
     const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "Route scoring failed");
+    }
+
     return data.routes;
   };
 
-  // 🔹 AI
-  const getAI = async (routes) => {
+  const getGeminiRecommendation = async (scoredRoutes) => {
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/ai/route-recommendation`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            routes,
-            userPrompt: "Suggest safest route",
-          }),
-        }
-      );
+      setAiLoading(true);
+      setAiResponse(null);
+
+      const res = await fetch(`${API_BASE_URL}/api/ai/route-recommendation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          routes: scoredRoutes,
+          userPrompt:
+            preference || "Prefer safest route with less risk and police nearby.",
+        }),
+      });
 
       const data = await res.json();
 
-      if (data.success) {
+      if (data.success && data.aiRecommendation) {
         setAiResponse(data.aiRecommendation);
-        setSelectedRoute(data.aiRecommendation.recommendedRouteIndex);
+
+        const recommendedIndex = Number(
+          data.aiRecommendation.recommendedRouteIndex
+        );
+
+        if (!Number.isNaN(recommendedIndex)) {
+          setSelectedRoute(recommendedIndex);
+        }
       }
-    } catch {}
+    } catch {
+      setAiResponse({
+        recommendedRouteIndex: 0,
+        summary: "Gemini is unavailable. Backend safest route is selected.",
+        reasoning:
+          "The app continued with backend route scoring because Gemini could not respond.",
+        safetyAdvice: [
+          "Prefer main roads.",
+          "Share live location.",
+          "Use SOS in emergency.",
+        ],
+        preferenceTags: ["Fallback", "Backend Safety"],
+      });
+    } finally {
+      setAiLoading(false);
+    }
   };
 
-  // 🔹 Search
   const handleSearch = async () => {
+    if (!source.trim() || !destination.trim()) {
+      alert("Please enter source and destination");
+      return;
+    }
+
     try {
       setLoading(true);
+      setMessage("");
+      setRoutes([]);
+      setAiResponse(null);
 
       const src = await geocode(source);
       const dest = await geocode(destination);
 
-      setSourceCoords([src.lat, src.lng]);
-      setDestCoords([dest.lat, dest.lng]);
+      const srcPoint = [src.lat, src.lng];
+      const destPoint = [dest.lat, dest.lng];
 
-      const rawRoutes = await getRoutes(src, dest);
-      const scored = await scoreRoutes(rawRoutes);
+      setSourceCoords(srcPoint);
+      setDestinationCoords(destPoint);
 
-      setRoutes(scored);
+      const rawRoutes = await getRoutesFromOSRM(src, dest);
+      const scoredRoutes = await scoreRoutes(rawRoutes);
+
+      setRoutes(scoredRoutes);
       setSelectedRoute(0);
 
-      getAI(scored);
-    } catch (err) {
-      alert(err.message);
+      await getGeminiRecommendation(scoredRoutes);
+    } catch (error) {
+      alert(error.message || "Could not find route");
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔹 Navigation
   const startNavigation = () => {
-    if (!userPosition || !sourceCoords) {
-      alert("Location not available");
+    if (!routes.length) {
+      setMessage("Please find and select a route first.");
       return;
     }
 
-    const dist =
-      Math.abs(userPosition[0] - sourceCoords[0]) +
-      Math.abs(userPosition[1] - sourceCoords[1]);
-
-    if (dist > 0.05) {
-      alert("You are not at starting point");
+    if (!navigator.geolocation) {
+      setMessage("Geolocation is not supported by this browser.");
       return;
     }
 
-    setNavigating(true);
-  };
-
-  // 🔹 SOS
-  const triggerSOS = async () => {
-    if (!userPosition) return alert("Location not found");
-
-    await fetch(`${API_BASE_URL}/api/sos/trigger`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setMessage("Navigation started. Follow the selected route.");
       },
-      body: JSON.stringify({
-        lat: userPosition[0],
-        lng: userPosition[1],
-      }),
-    });
-
-    alert("SOS triggered 🚨");
+      () => {
+        setMessage("Please allow location permission to start navigation.");
+      }
+    );
   };
+
+  const triggerSOS = async () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported.");
+      return;
+    }
+
+    const confirmSOS = window.confirm("Trigger emergency SOS?");
+    if (!confirmSOS) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await fetch(`${API_BASE_URL}/api/sos/trigger`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            }),
+          });
+
+          alert("SOS triggered successfully.");
+        } catch {
+          alert("SOS request sent, but backend response failed.");
+        }
+      },
+      () => {
+        alert("Location permission required for SOS.");
+      }
+    );
+  };
+
+  const activeRoute = routes[selectedRoute];
 
   return (
-    <div style={{ display: "flex", height: "90vh", gap: "15px" }}>
-      
-      {/* LEFT PANEL */}
-      <div style={{
-        width: "350px",
-        background: "#0f172a",
-        padding: "20px",
-        borderRadius: "12px",
-        color: "white",
-        overflowY: "auto"
-      }}>
+    <div className="route-layout">
+      <aside className="route-sidebar">
+        <div className="route-sidebar-header">
+          <h2>Find Safe Route</h2>
+          <p>Compare routes using safety score and Gemini guidance.</p>
+        </div>
 
-        <h2>Route Finder</h2>
+        <div className="route-form">
+          <input
+            placeholder="Enter source"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+          />
 
-        <input
-          placeholder="Source"
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-        />
+          <input
+            placeholder="Enter destination"
+            value={destination}
+            onChange={(e) => setDestination(e.target.value)}
+          />
 
-        <input
-          placeholder="Destination"
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-        />
+          <textarea
+            placeholder="Gemini preference: e.g. safest route at night, prefer police nearby"
+            value={preference}
+            onChange={(e) => setPreference(e.target.value)}
+          />
 
-        <button onClick={handleSearch}>
-          {loading ? "Finding..." : "Find Routes"}
-        </button>
+          <button className="find-route-btn" onClick={handleSearch}>
+            {loading ? "Finding Routes..." : "Find Routes"}
+          </button>
+        </div>
 
-        <button onClick={startNavigation}>
-          Start Navigation
-        </button>
+        <div className="quick-actions">
+          <button onClick={startNavigation}>Start Navigation</button>
+          <button className="sos-action" onClick={triggerSOS}>
+            SOS 🚨
+          </button>
+        </div>
 
-        <button onClick={triggerSOS} style={{ background: "red" }}>
-          SOS 🚨
-        </button>
+        {message && <div className="navigation-note">{message}</div>}
 
-        {aiResponse && (
+        <div className="ai-box">
+          <div className="section-title">Gemini Route Assistant</div>
+
+          {aiLoading ? (
+            <p>Gemini is analysing your routes...</p>
+          ) : aiResponse ? (
+            <>
+              <p className="ai-summary">{aiResponse.summary}</p>
+
+              {aiResponse.reasoning && (
+                <p className="ai-reason">{aiResponse.reasoning}</p>
+              )}
+
+              {Array.isArray(aiResponse.safetyAdvice) &&
+                aiResponse.safetyAdvice.length > 0 && (
+                  <ul className="advice-list">
+                    {aiResponse.safetyAdvice.map((tip, index) => (
+                      <li key={index}>{tip}</li>
+                    ))}
+                  </ul>
+                )}
+
+              {Array.isArray(aiResponse.preferenceTags) && (
+                <div className="tag-row">
+                  {aiResponse.preferenceTags.map((tag, index) => (
+                    <span key={index}>{tag}</span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p>Search a route to get AI recommendation.</p>
+          )}
+        </div>
+
+        <div className="routes-list">
+          <div className="section-title">Route Options</div>
+
+          {routes.length === 0 ? (
+            <p className="empty-text">No routes yet.</p>
+          ) : (
+            routes.map((route, index) => (
+              <div
+                key={index}
+                className={`route-card ${
+                  selectedRoute === index ? "selected" : ""
+                }`}
+                onClick={() => setSelectedRoute(index)}
+              >
+                <div className="route-card-top">
+                  <strong>Route {index + 1}</strong>
+                  <span>{route.routeTag || "Option"}</span>
+                </div>
+
+                <div className="route-score">
+                  {route.safetyScore || "--"}/100
+                </div>
+
+                <p>
+                  {route.distanceKm} km • {route.durationMin} min •{" "}
+                  {route.safetyLabel || "Safety"}
+                </p>
+
+                {route.incidentHits > 0 && (
+                  <small>{route.incidentHits} incident(s) near route</small>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      <main className="route-map-panel">
+        <div className="map-topbar">
           <div>
-            <h3>AI Suggestion</h3>
-            <p>{aiResponse.summary}</p>
+            <h3>{activeRoute ? `Route ${selectedRoute + 1}` : "Map Preview"}</h3>
+            <p>
+              {activeRoute
+                ? `${activeRoute.distanceKm} km • ${activeRoute.durationMin} min • Safety ${activeRoute.safetyScore}/100`
+                : "Enter source and destination to view routes."}
+            </p>
           </div>
-        )}
+        </div>
 
-        {routes.map((r, i) => (
-          <div
-            key={i}
-            onClick={() => setSelectedRoute(i)}
-            style={{
-              background:
-                selectedRoute === i ? "#22c55e" : "#1e293b",
-              padding: "10px",
-              marginTop: "10px",
-              cursor: "pointer"
-            }}
-          >
-            <strong>Route {i + 1}</strong>
-            <p>{r.distanceKm} km • {r.durationMin} min</p>
-            <p>Safety: {r.safetyScore}</p>
-          </div>
-        ))}
-      </div>
+        <MapContainer center={defaultCenter} zoom={11} className="route-map">
+          <ResizeMap routes={routes} />
+          <FitRouteBounds
+            sourceCoords={sourceCoords}
+            destinationCoords={destinationCoords}
+          />
 
-      {/* MAP */}
-      <div style={{ flex: 1 }}>
-        <MapContainer
-          center={defaultCenter}
-          zoom={12}
-          style={{ height: "100%", width: "100%" }}
-        >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-          {sourceCoords && <Marker position={sourceCoords} />}
-          {destCoords && <Marker position={destCoords} />}
+          {sourceCoords && (
+            <Marker position={sourceCoords}>
+              <Popup>Source</Popup>
+            </Marker>
+          )}
 
-          {userPosition && <Marker position={userPosition} />}
+          {destinationCoords && (
+            <Marker position={destinationCoords}>
+              <Popup>Destination</Popup>
+            </Marker>
+          )}
 
-          {routes.map((route, i) => (
+          {routes.map((route, index) => (
             <Polyline
-              key={i}
+              key={index}
               positions={route.coordinates}
               pathOptions={{
-                color: selectedRoute === i ? "green" : "gray",
-                weight: selectedRoute === i ? 6 : 3,
+                color: selectedRoute === index ? "#22c55e" : "#64748b",
+                weight: selectedRoute === index ? 7 : 4,
+                opacity: selectedRoute === index ? 0.95 : 0.35,
               }}
             />
           ))}
         </MapContainer>
-      </div>
+      </main>
     </div>
   );
-};
+}
 
 export default MapSection;
