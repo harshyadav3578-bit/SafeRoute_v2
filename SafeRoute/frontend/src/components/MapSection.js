@@ -1,11 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
   Polyline,
+  Marker,
 } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import API_BASE_URL from "../config/api";
+
+// Fix marker icon
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+const DefaultIcon = L.icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const MapSection = () => {
   const [source, setSource] = useState("");
@@ -14,9 +26,23 @@ const MapSection = () => {
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [aiResponse, setAiResponse] = useState(null);
+
+  const [sourceCoords, setSourceCoords] = useState(null);
+  const [destCoords, setDestCoords] = useState(null);
+
+  const [userPosition, setUserPosition] = useState(null);
+  const [navigating, setNavigating] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   const defaultCenter = [28.6139, 77.209];
+
+  // 🔹 Get current location
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition((pos) => {
+      setUserPosition([pos.coords.latitude, pos.coords.longitude]);
+    });
+  }, []);
 
   // 🔹 Geocode
   const geocode = async (place) => {
@@ -33,7 +59,7 @@ const MapSection = () => {
     };
   };
 
-  // 🔹 Routes
+  // 🔹 Get routes
   const getRoutes = async (src, dest) => {
     const url = `https://router.project-osrm.org/route/v1/driving/${src.lng},${src.lat};${dest.lng},${dest.lat}?alternatives=true&overview=full&geometries=geojson`;
 
@@ -48,15 +74,13 @@ const MapSection = () => {
     }));
   };
 
-  // 🔹 Safety scoring
+  // 🔹 Score routes
   const scoreRoutes = async (routes) => {
     const res = await fetch(
       `${API_BASE_URL}/api/route-safety/score-routes`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ routes }),
       }
     );
@@ -86,9 +110,7 @@ const MapSection = () => {
         setAiResponse(data.aiRecommendation);
         setSelectedRoute(data.aiRecommendation.recommendedRouteIndex);
       }
-    } catch {
-      console.log("AI failed");
-    }
+    } catch {}
   };
 
   // 🔹 Search
@@ -98,6 +120,9 @@ const MapSection = () => {
 
       const src = await geocode(source);
       const dest = await geocode(destination);
+
+      setSourceCoords([src.lat, src.lng]);
+      setDestCoords([dest.lat, dest.lng]);
 
       const rawRoutes = await getRoutes(src, dest);
       const scored = await scoreRoutes(rawRoutes);
@@ -113,10 +138,47 @@ const MapSection = () => {
     }
   };
 
+  // 🔹 Navigation
+  const startNavigation = () => {
+    if (!userPosition || !sourceCoords) {
+      alert("Location not available");
+      return;
+    }
+
+    const dist =
+      Math.abs(userPosition[0] - sourceCoords[0]) +
+      Math.abs(userPosition[1] - sourceCoords[1]);
+
+    if (dist > 0.05) {
+      alert("You are not at starting point");
+      return;
+    }
+
+    setNavigating(true);
+  };
+
+  // 🔹 SOS
+  const triggerSOS = async () => {
+    if (!userPosition) return alert("Location not found");
+
+    await fetch(`${API_BASE_URL}/api/sos/trigger`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        lat: userPosition[0],
+        lng: userPosition[1],
+      }),
+    });
+
+    alert("SOS triggered 🚨");
+  };
+
   return (
     <div style={{ display: "flex", height: "90vh", gap: "15px" }}>
       
-      {/* 🔹 LEFT PANEL */}
+      {/* LEFT PANEL */}
       <div style={{
         width: "350px",
         background: "#0f172a",
@@ -128,78 +190,69 @@ const MapSection = () => {
 
         <h2>Route Finder</h2>
 
-        {/* Inputs */}
         <input
           placeholder="Source"
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
         />
 
         <input
           placeholder="Destination"
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
-          style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
         />
 
-        <button
-          onClick={handleSearch}
-          style={{
-            width: "100%",
-            padding: "10px",
-            background: "#22c55e",
-            border: "none",
-            borderRadius: "8px",
-            color: "white",
-            cursor: "pointer"
-          }}
-        >
+        <button onClick={handleSearch}>
           {loading ? "Finding..." : "Find Routes"}
         </button>
 
-        {/* AI */}
+        <button onClick={startNavigation}>
+          Start Navigation
+        </button>
+
+        <button onClick={triggerSOS} style={{ background: "red" }}>
+          SOS 🚨
+        </button>
+
         {aiResponse && (
-          <div style={{ marginTop: "20px" }}>
+          <div>
             <h3>AI Suggestion</h3>
             <p>{aiResponse.summary}</p>
           </div>
         )}
 
-        {/* Routes */}
-        <div style={{ marginTop: "20px" }}>
-          {routes.map((r, i) => (
-            <div
-              key={i}
-              onClick={() => setSelectedRoute(i)}
-              style={{
-                padding: "12px",
-                marginBottom: "10px",
-                borderRadius: "10px",
-                background:
-                  selectedRoute === i ? "#22c55e" : "#1e293b",
-                cursor: "pointer"
-              }}
-            >
-              <strong>Route {i + 1}</strong>
-              <p>{r.distanceKm} km • {r.durationMin} min</p>
-              <p>Safety: {r.safetyScore}</p>
-            </div>
-          ))}
-        </div>
-
+        {routes.map((r, i) => (
+          <div
+            key={i}
+            onClick={() => setSelectedRoute(i)}
+            style={{
+              background:
+                selectedRoute === i ? "#22c55e" : "#1e293b",
+              padding: "10px",
+              marginTop: "10px",
+              cursor: "pointer"
+            }}
+          >
+            <strong>Route {i + 1}</strong>
+            <p>{r.distanceKm} km • {r.durationMin} min</p>
+            <p>Safety: {r.safetyScore}</p>
+          </div>
+        ))}
       </div>
 
-      {/* 🔹 MAP */}
+      {/* MAP */}
       <div style={{ flex: 1 }}>
         <MapContainer
           center={defaultCenter}
           zoom={12}
-          style={{ height: "100%", width: "100%", borderRadius: "12px" }}
+          style={{ height: "100%", width: "100%" }}
         >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {sourceCoords && <Marker position={sourceCoords} />}
+          {destCoords && <Marker position={destCoords} />}
+
+          {userPosition && <Marker position={userPosition} />}
 
           {routes.map((route, i) => (
             <Polyline
@@ -213,7 +266,6 @@ const MapSection = () => {
           ))}
         </MapContainer>
       </div>
-
     </div>
   );
 };
