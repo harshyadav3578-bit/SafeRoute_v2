@@ -14,12 +14,11 @@ const MapSection = () => {
   const [routes, setRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [aiResponse, setAiResponse] = useState(null);
-
   const [loading, setLoading] = useState(false);
 
   const defaultCenter = [28.6139, 77.209];
 
-  // 🔹 Geocode function
+  // 🔹 Geocode
   const geocode = async (place) => {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${place}`
@@ -34,7 +33,7 @@ const MapSection = () => {
     };
   };
 
-  // 🔹 Fetch routes
+  // 🔹 Routes
   const getRoutes = async (src, dest) => {
     const url = `https://router.project-osrm.org/route/v1/driving/${src.lng},${src.lat};${dest.lng},${dest.lat}?alternatives=true&overview=full&geometries=geojson`;
 
@@ -66,19 +65,17 @@ const MapSection = () => {
     return data.routes;
   };
 
-  // 🔹 Gemini AI
+  // 🔹 AI
   const getAI = async (routes) => {
     try {
       const res = await fetch(
         `${API_BASE_URL}/api/ai/route-recommendation`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             routes,
-            userPrompt: "Give safest route",
+            userPrompt: "Suggest safest route",
           }),
         }
       );
@@ -90,11 +87,11 @@ const MapSection = () => {
         setSelectedRoute(data.aiRecommendation.recommendedRouteIndex);
       }
     } catch {
-      console.log("AI failed, fallback used");
+      console.log("AI failed");
     }
   };
 
-  // 🔹 Main search
+  // 🔹 Search
   const handleSearch = async () => {
     try {
       setLoading(true);
@@ -117,72 +114,106 @@ const MapSection = () => {
   };
 
   return (
-    <div>
-      {/* 🔹 Input UI */}
-      <div className="map-route-bar">
+    <div style={{ display: "flex", height: "90vh", gap: "15px" }}>
+      
+      {/* 🔹 LEFT PANEL */}
+      <div style={{
+        width: "350px",
+        background: "#0f172a",
+        padding: "20px",
+        borderRadius: "12px",
+        color: "white",
+        overflowY: "auto"
+      }}>
+
+        <h2>Route Finder</h2>
+
+        {/* Inputs */}
         <input
-          placeholder="Enter source"
+          placeholder="Source"
           value={source}
           onChange={(e) => setSource(e.target.value)}
+          style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
         />
 
         <input
-          placeholder="Enter destination"
+          placeholder="Destination"
           value={destination}
           onChange={(e) => setDestination(e.target.value)}
+          style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
         />
 
-        <button onClick={handleSearch}>
-          {loading ? "Loading..." : "Find Route"}
+        <button
+          onClick={handleSearch}
+          style={{
+            width: "100%",
+            padding: "10px",
+            background: "#22c55e",
+            border: "none",
+            borderRadius: "8px",
+            color: "white",
+            cursor: "pointer"
+          }}
+        >
+          {loading ? "Finding..." : "Find Routes"}
         </button>
-      </div>
 
-      {/* 🔹 AI Box */}
-      {aiResponse && (
-        <div className="glass-card">
-          <h3>AI Recommendation</h3>
-          <p>{aiResponse.summary}</p>
-        </div>
-      )}
-
-      {/* 🔹 Routes UI */}
-      <div className="route-options-panel">
-        {routes.map((r, i) => (
-          <div
-            key={i}
-            className={`route-option-card ${
-              selectedRoute === i ? "active" : ""
-            }`}
-            onClick={() => setSelectedRoute(i)}
-          >
-            <h4>Route {i + 1}</h4>
-            <p>{r.distanceKm} km • {r.durationMin} min</p>
-            <p>Safety: {r.safetyScore}</p>
+        {/* AI */}
+        {aiResponse && (
+          <div style={{ marginTop: "20px" }}>
+            <h3>AI Suggestion</h3>
+            <p>{aiResponse.summary}</p>
           </div>
-        ))}
+        )}
+
+        {/* Routes */}
+        <div style={{ marginTop: "20px" }}>
+          {routes.map((r, i) => (
+            <div
+              key={i}
+              onClick={() => setSelectedRoute(i)}
+              style={{
+                padding: "12px",
+                marginBottom: "10px",
+                borderRadius: "10px",
+                background:
+                  selectedRoute === i ? "#22c55e" : "#1e293b",
+                cursor: "pointer"
+              }}
+            >
+              <strong>Route {i + 1}</strong>
+              <p>{r.distanceKm} km • {r.durationMin} min</p>
+              <p>Safety: {r.safetyScore}</p>
+            </div>
+          ))}
+        </div>
+
       </div>
 
-      {/* 🔹 Map */}
-      <MapContainer
-        center={defaultCenter}
-        zoom={12}
-        className="map-container"
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {routes.map((route, i) => (
-          <Polyline
-            key={i}
-            positions={route.coordinates}
-            pathOptions={{
-              color: selectedRoute === i ? "green" : "gray",
-              weight: selectedRoute === i ? 6 : 3,
-            }}
+      {/* 🔹 MAP */}
+      <div style={{ flex: 1 }}>
+        <MapContainer
+          center={defaultCenter}
+          zoom={12}
+          style={{ height: "100%", width: "100%", borderRadius: "12px" }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-        ))}
-      </MapContainer>
+
+          {routes.map((route, i) => (
+            <Polyline
+              key={i}
+              positions={route.coordinates}
+              pathOptions={{
+                color: selectedRoute === i ? "green" : "gray",
+                weight: selectedRoute === i ? 6 : 3,
+              }}
+            />
+          ))}
+        </MapContainer>
+      </div>
+
     </div>
   );
 };
