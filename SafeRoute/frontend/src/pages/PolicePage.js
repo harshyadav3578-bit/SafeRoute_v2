@@ -1,129 +1,61 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import MapSection from '../components/MapSection';
-import '../styles/dashboard.css';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import API_BASE_URL from "../config/api";
+import "../styles/dashboard.css";
 
 function PolicePage() {
-  const [area, setArea] = useState('Connaught Place, Delhi');
-  const [selectedPosition, setSelectedPosition] = useState([28.6315, 77.2167]);
-  const [stations, setStations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    setError('');
+  const [area, setArea] = useState("");
+  const [stations, setStations] = useState([]);
 
-    if (!area.trim()) {
-      setError('Please enter an area name.');
-      return;
-    }
-
-    setLoading(true);
-
+  const searchPolice = async () => {
     try {
-      const geoResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(area)}`
+      const res = await fetch(
+        `${API_BASE_URL}/api/police/search?area=${area}`
       );
-      const geoData = await geoResponse.json();
-
-      if (!geoData.length) {
-        setError('Area not found. Try a more specific Delhi location.');
-        setStations([]);
-        return;
-      }
-
-      const lat = Number(geoData[0].lat);
-      const lng = Number(geoData[0].lon);
-      setSelectedPosition([lat, lng]);
-
-      const policeResponse = await fetch(
-        `http://localhost:5000/api/police/nearby?lat=${lat}&lng=${lng}&limit=5`
-      );
-      const policeData = await policeResponse.json();
-
-      if (!policeResponse.ok) {
-        setError(policeData.message || 'Could not fetch nearby police stations.');
-        setStations([]);
-        return;
-      }
-
-      setStations(policeData);
-      if (!policeData.length) {
-        setError('No nearby police station data found.');
-      }
-    } catch (err) {
-      setError('Could not search the location right now.');
-    } finally {
-      setLoading(false);
+      const data = await res.json();
+      setStations(data);
+    } catch {
+      alert("Error fetching police");
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('saferouteUser');
-    navigate('/login');
   };
 
   return (
-    <div className="dashboard-wrapper police-page-wrapper">
-      <div className="top-section police-top-section left-aligned">
+    <div className="dashboard-wrapper">
+      <div className="app-shell">
         <div className="page-header-row">
-          <div>
-            <h1>Nearby Police Stations</h1>
-            <p>Enter an area and view the nearest police stations on the map.</p>
+          <div className="page-header-card">
+            <h1>Police Stations</h1>
           </div>
-          <button className="secondary-btn" onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
+
+          <button className="secondary-btn" onClick={() => navigate("/dashboard")}>
+            ← Back
           </button>
         </div>
 
-        <form className="search-panel" onSubmit={handleSearch}>
-          <input
-            type="text"
-            placeholder="Enter area, locality, or landmark"
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
-          />
-          <button className="primary-btn" type="submit" disabled={loading}>
-            {loading ? 'Searching...' : 'Find Nearby Police'}
-          </button>
-          <button className="secondary-btn" type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </form>
+        <div className="form-card">
+          <div className="form-grid">
+            <input
+              placeholder="Enter area"
+              onChange={(e) => setArea(e.target.value)}
+            />
 
-        {error && <div className="status-box error-box">{error}</div>}
-      </div>
-
-      <div className="police-layout">
-        <div className="police-map-card">
-          <MapSection
-            center={[28.6139, 77.209]}
-            selectedPosition={selectedPosition}
-            selectedLabel={area || 'Selected Area'}
-            stations={stations}
-            height="100%"
-          />
+            <button className="primary-btn" onClick={searchPolice}>
+              Search
+            </button>
+          </div>
         </div>
 
-        <div className="police-list-card">
-          <h3>Nearest Stations</h3>
-          {!stations.length ? (
-            <p className="muted-text">Search for an area to see the nearest police stations.</p>
-          ) : (
-            <div className="station-list">
-              {stations.map((station, index) => (
-                <div key={station._id || `${station.name}-${index}`} className="station-item">
-                  <div className="station-rank">#{index + 1}</div>
-                  <div>
-                    <strong>{station.name}</strong>
-                    <p>{station.distance.toFixed(2)} km away</p>
-                  </div>
-                </div>
-              ))}
+        <div className="result-card">
+          <h3>Stations</h3>
+
+          {stations.map((s, i) => (
+            <div key={i} className="data-card">
+              <strong>{s.name}</strong>
+              <p>{s.address}</p>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>

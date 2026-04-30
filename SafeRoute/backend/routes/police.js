@@ -1,6 +1,8 @@
 const express = require('express');
 const Police = require('../models/Police');
 
+
+
 const router = express.Router();
 
 function haversineDistance(lat1, lon1, lat2, lon2) {

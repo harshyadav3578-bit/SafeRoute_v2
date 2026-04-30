@@ -1,0 +1,165 @@
+{
+  "app_metadata": {
+    "project_name": "SafeRoute",
+    "version": "2.5",
+    "credits": "2025 Aesthetic Lookbook.Designed by Khushi Shah",
+    "target_city": "Delhi"
+  },
+  "safety_data": {
+    "crime_hotspots": [
+      {
+        "location": "Anand Vihar Metro Terminal",
+        "latitude": 28.6469,
+        "longitude": 77.3161,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Seemapuri Bus Stop",
+        "latitude": 28.6814,
+        "longitude": 77.3204,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Gokalpuri Bus Stop and Metro Station",
+        "latitude": 28.7058,
+        "longitude": 77.2882,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Old Delhi Railway Station",
+        "latitude": 28.6606,
+        "longitude": 77.2273,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "New Delhi Railway Station",
+        "latitude": 28.6429,
+        "longitude": 77.2191,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Sarai Kale Khan Bus Terminal",
+        "latitude": 28.5880,
+        "longitude": 77.2605,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Nizamuddin Railway Station",
+        "latitude": 28.5898,
+        "longitude": 77.2530,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Kashmere Gate Bus and Metro Terminal",
+        "latitude": 28.6665,
+        "longitude": 77.2333,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Vishwavidyalaya Metro Station",
+        "latitude": 28.6946,
+        "longitude": 77.2142,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Jahangirpuri Metro Station",
+        "latitude": 28.7262,
+        "longitude": 77.1729,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Vasant Vihar Bus Stop",
+        "latitude": 28.5601,
+        "longitude": 77.1587,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Vasant Kunj Nelson Mandela Marg",
+        "latitude": 28.5413,
+        "longitude": 77.1525,
+        "risk_type": "Street Crime"
+      },
+      {
+        "location": "Rajiv Chowk Metro Station",
+        "latitude": 28.6328,
+        "longitude": 77.2197,
+        "risk_type": "Transit Hub Crime"
+      },
+      {
+        "location": "Hauz Khas Metro Station",
+        "latitude": 28.5435,
+        "longitude": 77.2058,
+        "risk_type": "Transit Hub Crime"
+      }
+    ],
+    "accident_blackspots": [
+      { "name": "Mukarba Chowk", "latitude": 28.7397, "longitude": 77.1610, "fatal_crashes_2022": 12 },
+      { "name": "Khampur Village", "latitude": 28.6496, "longitude": 77.1584, "fatal_crashes_2022": 10 },
+      { "name": "Dhaula Kuan", "latitude": 28.5918, "longitude": 77.1616, "fatal_crashes_2022": 8 },
+      { "name": "Maya Puri Chowk", "latitude": 28.6346, "longitude": 77.1278, "fatal_crashes_2022": 8 },
+      { "name": "Gandhi Vihar Bus Stand", "latitude": 28.7200, "longitude": 77.2081, "fatal_crashes_2022": 7 },
+      { "name": "Bhalswa Chowk", "latitude": 28.7346, "longitude": 77.1643, "fatal_crashes_2022": 7 },
+      { "name": "Peeragarhi Chowk", "latitude": 28.6811, "longitude": 77.0854, "fatal_crashes_2022": 7 },
+      { "name": "Punjabi Bagh Chowk", "latitude": 28.6675, "longitude": 77.1353, "fatal_crashes_2022": 7 },
+      { "name": "Britannia Chowk", "latitude": 28.6853, "longitude": 77.1425, "fatal_crashes_2022": 7 },
+      { "name": "Ashram Chowk", "latitude": 28.5724, "longitude": 77.2554, "fatal_crashes_2022": 7 },
+      { "name": "Akshardham Mandir", "latitude": 28.6127, "longitude": 77.2773, "fatal_crashes_2022": 6 },
+      { "name": "Adarsh Nagar", "latitude": 28.7159, "longitude": 77.1720, "fatal_crashes_2022": 6 },
+      { "name": "Mukundpur Chowk", "latitude": 28.7360, "longitude": 77.1820, "fatal_crashes_2022": 5 },
+      { "name": "Nirankari Colony", "latitude": 28.7161, "longitude": 77.1951, "fatal_crashes_2022": 5 },
+      { "name": "Loni Road Crossing", "latitude": 28.6974, "longitude": 77.2885, "fatal_crashes_2022": 5 },
+      { "name": "Murga Mandi Flyover", "latitude": 28.6268, "longitude": 77.3245, "fatal_crashes_2022": 5 },
+      { "name": "Shalimar Bagh", "latitude": 28.7032, "longitude": 77.1620, "fatal_crashes_2022": 5 },
+      { "name": "Rama Road Crossing", "latitude": 28.6536, "longitude": 77.1421, "fatal_crashes_2022": 5 },
+      { "name": "Kalindi Kunj", "latitude": 28.5434, "longitude": 77.3090, "fatal_crashes_2022": 5 },
+      { "name": "Monastery Ring Road", "latitude": 28.6705, "longitude": 77.2307, "fatal_crashes_2022": 5 },
+      { "name": "Nangli Poona", "latitude": 28.7735, "longitude": 77.1465, "fatal_crashes_2022": 5 },
+      { "name": "Rajokri Flyover", "latitude": 28.5135, "longitude": 77.1083, "fatal_crashes_2022": 5 },
+      { "name": "Metro Station Dilshad Garden", "latitude": 28.6817, "longitude": 77.3197, "fatal_crashes_2022": 5 },
+      { "name": "Wazir Pur Depot", "latitude": 28.6888, "longitude": 77.1462, "fatal_crashes_2022": 5 },
+      { "name": "Metro Station Madipur", "latitude": 28.6725, "longitude": 77.1121, "fatal_crashes_2022": 5 },
+      { "name": "Gb Pant Hospital", "latitude": 28.6393, "longitude": 77.2359, "fatal_crashes_2022": 5 },
+      { "name": "Under Pass Gajipur", "latitude": 28.6273, "longitude": 77.3262, "fatal_crashes_2022": 5 },
+      { "name": "SGT Nagar", "latitude": 28.7516, "longitude": 77.1438, "fatal_crashes_2022": 5 },
+      { "name": "Okhla More", "latitude": 28.5458, "longitude": 77.2798, "fatal_crashes_2022": 5 },
+      { "name": "Shanti Van", "latitude": 28.6441, "longitude": 77.2452, "fatal_crashes_2022": 4 },
+      { "name": "ITO/I P Flyover", "latitude": 28.6288, "longitude": 77.2415, "fatal_crashes_2022": 4 },
+      { "name": "AIIMS", "latitude": 28.5672, "longitude": 77.2100, "fatal_crashes_2022": 4 },
+      { "name": "Zakhira Flyover", "latitude": 28.6657, "longitude": 77.1601, "fatal_crashes_2022": 4 },
+      { "name": "Azadpur Bus Terminal", "latitude": 28.7067, "longitude": 77.1751, "fatal_crashes_2022": 4 },
+      { "name": "Mahipalpur Flyover", "latitude": 28.5484, "longitude": 77.1206, "fatal_crashes_2022": 4 },
+      { "name": "Toll Plaza Badarpur", "latitude": 28.4975, "longitude": 77.3031, "fatal_crashes_2022": 4 }
+    ],
+    "high_risk_corridors_overall": [
+      {
+        "stretch": "Azadpur flyover to Punjabi Bagh Chowk",
+        "risk_metric": "5 deaths per km"
+      },
+      {
+        "stretch": "Grand Trunk Road: Kundli to Mukarba Chowk",
+        "risk_metric": "4 deaths per km"
+      },
+      {
+        "stretch": "Tikri Border to Punjabi Bagh Chowk",
+        "risk_metric": "3 deaths per km"
+      },
+      {
+        "stretch": "Outer Ring Road: Mukarba Chowk to Shivaji Park",
+        "risk_metric": "3 deaths per km"
+      },
+      {
+        "stretch": "Mahatma Gandhi Marg: Dhaula Kuan Flyover to Rajouri Garden Metro",
+        "risk_metric": "3 deaths per km"
+      },
+      {
+        "stretch": "Ghazipur Road",
+        "risk_metric": "3 deaths per km"
+      }
+    ],
+    "temporal_weightage": {
+      "peak_accident_time": "21:00 to 01:59",
+      "high_risk_days": "Saturdays, Sundays, and Mondays",
+      "hit_and_run_rate": "59% of all documented fatal road crashes"
+    }
+  }
+}

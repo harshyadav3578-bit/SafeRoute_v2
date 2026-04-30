@@ -1,241 +1,192 @@
-import React, { useMemo, useState } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import React, { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
-  CircleMarker,
-  useMap,
 } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import API_BASE_URL from "../config/api";
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require("leaflet/dist/images/marker-icon-2x.png"),
-  iconUrl: require("leaflet/dist/images/marker-icon.png"),
-  shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
-});
+const MapSection = () => {
+  const [source, setSource] = useState("");
+  const [destination, setDestination] = useState("");
 
-function ChangeMapView({ center, zoom }) {
-  const map = useMap();
-  if (center) {
-    map.setView(center, zoom || 13, { animate: true });
-  }
-  return null;
-}
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [aiResponse, setAiResponse] = useState(null);
 
-function FitBounds({ sourcePosition, destinationPosition }) {
-  const map = useMap();
+  const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
-    if (sourcePosition && destinationPosition) {
-      map.fitBounds([sourcePosition, destinationPosition], { padding: [50, 50] });
-    }
-  }, [map, sourcePosition, destinationPosition]);
+  const defaultCenter = [28.6139, 77.209];
 
-  return null;
-}
-
-export default function MapSection() {
-  const defaultCenter = useMemo(() => [28.6139, 77.209], []);
-  const [mapCenter, setMapCenter] = useState(defaultCenter);
-
-  const [sourceText, setSourceText] = useState("");
-  const [destinationText, setDestinationText] = useState("");
-
-  const [sourcePosition, setSourcePosition] = useState(null);
-  const [destinationPosition, setDestinationPosition] = useState(null);
-
-  const [routeCoords, setRouteCoords] = useState([]);
-  const [routeInfo, setRouteInfo] = useState(null);
-
-  const [nearbyPolice, setNearbyPolice] = useState([]);
-
-  const [loadingRoute, setLoadingRoute] = useState(false);
-  const [loadingPolice, setLoadingPolice] = useState(false);
-
-  const geocodeLocation = async (place) => {
+  // 🔹 Geocode function
+  const geocode = async (place) => {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
-        place
-      )}`
+      `https://nominatim.openstreetmap.org/search?format=json&q=${place}`
     );
     const data = await res.json();
 
-    if (!data || data.length === 0) {
-      throw new Error(`Location not found: ${place}`);
-    }
+    if (!data.length) throw new Error("Location not found");
 
     return {
       lat: parseFloat(data[0].lat),
       lng: parseFloat(data[0].lon),
-      displayName: data[0].display_name,
     };
   };
 
-  const fetchNearbyPolice = async (lat, lng) => {
-    try {
-      setLoadingPolice(true);
-      const res = await fetch(
-        `http://localhost:5000/api/police/nearby?lat=${lat}&lng=${lng}`
-      );
-      const data = await res.json();
-      setNearbyPolice(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Error fetching nearby police:", err);
-      setNearbyPolice([]);
-    } finally {
-      setLoadingPolice(false);
-    }
-  };
-
-  const fetchRoute = async (src, dest) => {
-    const url = `https://router.project-osrm.org/route/v1/driving/${src.lng},${src.lat};${dest.lng},${dest.lat}?overview=full&geometries=geojson`;
+  // 🔹 Fetch routes
+  const getRoutes = async (src, dest) => {
+    const url = `https://router.project-osrm.org/route/v1/driving/${src.lng},${src.lat};${dest.lng},${dest.lat}?alternatives=true&overview=full&geometries=geojson`;
 
     const res = await fetch(url);
     const data = await res.json();
 
-    if (!data.routes || data.routes.length === 0) {
-      throw new Error("No route found");
-    }
-
-    const route = data.routes[0];
-
-    const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-
-    setRouteCoords(coords);
-    setRouteInfo({
+    return data.routes.slice(0, 3).map((route, i) => ({
+      routeIndex: i,
+      coordinates: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
       distanceKm: (route.distance / 1000).toFixed(2),
       durationMin: Math.ceil(route.duration / 60),
-    });
+    }));
   };
 
-  const handleRouteSearch = async (e) => {
-    e.preventDefault();
+  // 🔹 Safety scoring
+  const scoreRoutes = async (routes) => {
+    const res = await fetch(
+      `${API_BASE_URL}/api/route-safety/score-routes`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ routes }),
+      }
+    );
 
-    if (!sourceText.trim() || !destinationText.trim()) {
-      alert("Please enter both source and destination");
-      return;
-    }
+    const data = await res.json();
+    return data.routes;
+  };
 
+  // 🔹 Gemini AI
+  const getAI = async (routes) => {
     try {
-      setLoadingRoute(true);
-      setRouteCoords([]);
-      setRouteInfo(null);
-      setNearbyPolice([]);
+      const res = await fetch(
+        `${API_BASE_URL}/api/ai/route-recommendation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            routes,
+            userPrompt: "Give safest route",
+          }),
+        }
+      );
 
-      const src = await geocodeLocation(sourceText);
-      const dest = await geocodeLocation(destinationText);
+      const data = await res.json();
 
-      const srcPos = [src.lat, src.lng];
-      const destPos = [dest.lat, dest.lng];
+      if (data.success) {
+        setAiResponse(data.aiRecommendation);
+        setSelectedRoute(data.aiRecommendation.recommendedRouteIndex);
+      }
+    } catch {
+      console.log("AI failed, fallback used");
+    }
+  };
 
-      setSourcePosition(srcPos);
-      setDestinationPosition(destPos);
-      setMapCenter(srcPos);
+  // 🔹 Main search
+  const handleSearch = async () => {
+    try {
+      setLoading(true);
 
-      await fetchRoute(src, dest);
-      await fetchNearbyPolice(dest.lat, dest.lng);
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Could not find route");
+      const src = await geocode(source);
+      const dest = await geocode(destination);
+
+      const rawRoutes = await getRoutes(src, dest);
+      const scored = await scoreRoutes(rawRoutes);
+
+      setRoutes(scored);
+      setSelectedRoute(0);
+
+      getAI(scored);
+    } catch (err) {
+      alert(err.message);
     } finally {
-      setLoadingRoute(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="map-shell">
-      <form className="map-route-bar" onSubmit={handleRouteSearch}>
+    <div>
+      {/* 🔹 Input UI */}
+      <div className="map-route-bar">
         <input
-          type="text"
-          placeholder="Enter source, e.g. Dwarka, Delhi"
-          value={sourceText}
-          onChange={(e) => setSourceText(e.target.value)}
+          placeholder="Enter source"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
         />
 
         <input
-          type="text"
-          placeholder="Enter destination, e.g. Saket, Delhi"
-          value={destinationText}
-          onChange={(e) => setDestinationText(e.target.value)}
+          placeholder="Enter destination"
+          value={destination}
+          onChange={(e) => setDestination(e.target.value)}
         />
 
-        <button type="submit" disabled={loadingRoute}>
-          {loadingRoute ? "Finding..." : "Show Route"}
+        <button onClick={handleSearch}>
+          {loading ? "Loading..." : "Find Route"}
         </button>
-      </form>
+      </div>
 
-      {routeInfo && (
-        <div className="route-info-card">
-          <div><strong>Distance:</strong> {routeInfo.distanceKm} km</div>
-          <div><strong>Time:</strong> {routeInfo.durationMin} min</div>
-          {loadingPolice ? <div>Loading nearby police...</div> : null}
+      {/* 🔹 AI Box */}
+      {aiResponse && (
+        <div className="glass-card">
+          <h3>AI Recommendation</h3>
+          <p>{aiResponse.summary}</p>
         </div>
       )}
 
-      <MapContainer center={defaultCenter} zoom={11} className="map-container">
-        <ChangeMapView center={mapCenter} zoom={12} />
-        <FitBounds
-          sourcePosition={sourcePosition}
-          destinationPosition={destinationPosition}
-        />
+      {/* 🔹 Routes UI */}
+      <div className="route-options-panel">
+        {routes.map((r, i) => (
+          <div
+            key={i}
+            className={`route-option-card ${
+              selectedRoute === i ? "active" : ""
+            }`}
+            onClick={() => setSelectedRoute(i)}
+          >
+            <h4>Route {i + 1}</h4>
+            <p>{r.distanceKm} km • {r.durationMin} min</p>
+            <p>Safety: {r.safetyScore}</p>
+          </div>
+        ))}
+      </div>
 
+      {/* 🔹 Map */}
+      <MapContainer
+        center={defaultCenter}
+        zoom={12}
+        className="map-container"
+      >
         <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {sourcePosition && (
-          <>
-            <Marker position={sourcePosition}>
-              <Popup>Source</Popup>
-            </Marker>
-            <CircleMarker center={sourcePosition} radius={12} pathOptions={{ weight: 2 }} />
-          </>
-        )}
-
-        {destinationPosition && (
-          <>
-            <Marker position={destinationPosition}>
-              <Popup>Destination</Popup>
-            </Marker>
-            <CircleMarker
-              center={destinationPosition}
-              radius={12}
-              pathOptions={{ weight: 2 }}
-            />
-          </>
-        )}
-
-        {routeCoords.length > 0 && (
-          <Polyline positions={routeCoords} />
-        )}
-
-        {nearbyPolice.map((station, index) => (
-          <Marker
-            key={station._id || index}
-            position={[
-              station.lat ??
-                station.location?.coordinates?.[1],
-              station.lng ??
-                station.location?.coordinates?.[0],
-            ]}
-          >
-            <Popup>
-              <strong>{station.name}</strong>
-              {station.distanceKm !== undefined && (
-                <>
-                  <br />
-                  Distance: {station.distanceKm} km
-                </>
-              )}
-            </Popup>
-          </Marker>
+        {routes.map((route, i) => (
+          <Polyline
+            key={i}
+            positions={route.coordinates}
+            pathOptions={{
+              color: selectedRoute === i ? "green" : "gray",
+              weight: selectedRoute === i ? 6 : 3,
+            }}
+          />
         ))}
       </MapContainer>
     </div>
   );
-}
+};
+
+export default MapSection;

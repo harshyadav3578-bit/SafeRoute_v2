@@ -1,47 +1,59 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import saferoute from '../assets/safe-route.png';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import saferoute from "../assets/safe-route.png";
 
-const API_BASE = 'http://localhost:5000/api/auth';
+const API_BASE = "http://localhost:5000/api/auth";
 
 function LoginPage() {
   const [isSignupMode, setIsSignupMode] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
 
   const resetMessages = () => {
-    setMessage('');
-    setError('');
+    setMessage("");
+    setError("");
   };
 
-  const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const clearForm = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const validateEmail = (value) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     resetMessages();
 
-    if (!email || !password) {
-      setError('Please enter both email and password.');
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !password) {
+      setError("Please enter both email and password.");
       return;
     }
 
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address.');
+    if (!validateEmail(trimmedEmail)) {
+      setError("Please enter a valid email address.");
       return;
     }
 
     if (isSignupMode) {
       if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
+        setError("Password must be at least 6 characters long.");
         return;
       }
+
       if (password !== confirmPassword) {
-        setError('Passwords do not match.');
+        setError("Passwords do not match.");
         return;
       }
     }
@@ -49,36 +61,50 @@ function LoginPage() {
     setLoading(true);
 
     try {
-      const endpoint = isSignupMode ? 'signup' : 'login';
+      const endpoint = isSignupMode ? "signup" : "login";
+
       const response = await fetch(`${API_BASE}/${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || 'Something went wrong.');
+        setError(data.message || "Something went wrong.");
         return;
       }
 
       if (isSignupMode) {
-        setMessage('Signup successful. You can log in now.');
+        setMessage("Signup successful. You can log in now.");
         setIsSignupMode(false);
-        setPassword('');
-        setConfirmPassword('');
+        setPassword("");
+        setConfirmPassword("");
       } else {
-        localStorage.setItem('saferouteUser', JSON.stringify(data.user));
-        navigate('/dashboard');
+        // Important: store full user object for route page, SOS, contacts, etc.
+        localStorage.setItem("saferouteUser", JSON.stringify(data.user));
+        setMessage("Login successful.");
+        navigate("/dashboard");
       }
     } catch (err) {
-      setError('Unable to connect to the server.');
+      console.error("Auth error:", err);
+      setError("Unable to connect to the server.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleMode = () => {
+    resetMessages();
+    setIsSignupMode((prev) => !prev);
+    setPassword("");
+    setConfirmPassword("");
   };
 
   return (
@@ -95,11 +121,11 @@ function LoginPage() {
         </div>
 
         <div className="form-container">
-          <h2>{isSignupMode ? 'Create Account' : 'Welcome Back'}</h2>
+          <h2>{isSignupMode ? "Create Account" : "Welcome Back"}</h2>
           <p className="form-subtitle">
             {isSignupMode
-              ? 'Sign up using your email and password.'
-              : 'Log in with your registered email and password.'}
+              ? "Sign up using your email and password."
+              : "Log in with your registered email and password."}
           </p>
 
           <form onSubmit={handleSubmit}>
@@ -108,19 +134,24 @@ function LoginPage() {
               placeholder="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
+
             <input
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete={isSignupMode ? "new-password" : "current-password"}
             />
+
             {isSignupMode && (
               <input
                 type="password"
                 placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
               />
             )}
 
@@ -128,24 +159,15 @@ function LoginPage() {
             {message && <div className="form-success">{message}</div>}
 
             <button className="login-btn" type="submit" disabled={loading}>
-              {loading ? 'Please wait...' : isSignupMode ? 'Sign Up' : 'Sign In'}
+              {loading ? "Please wait..." : isSignupMode ? "Sign Up" : "Sign In"}
             </button>
           </form>
 
           <div className="login-links login-links-center">
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                resetMessages();
-                setIsSignupMode(!isSignupMode);
-                setPassword('');
-                setConfirmPassword('');
-              }}
-            >
+            <button type="button" className="link-button" onClick={toggleMode}>
               {isSignupMode
-                ? 'Already have an account? Sign in'
-                : 'New here? Create an account'}
+                ? "Already have an account? Sign in"
+                : "New here? Create an account"}
             </button>
           </div>
         </div>
